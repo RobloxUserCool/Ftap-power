@@ -1,0 +1,119 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local strength = 50 -- от 1 до 1000
+
+-- GUI
+local parent = (gethui and gethui()) or game:GetService("CoreGui")
+local okParent = pcall(function() return parent.Name end)
+if not okParent then parent = player:WaitForChild("PlayerGui") end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "ThrowMenu"
+gui.ResetOnSpawn = false
+gui.Parent = parent
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 130)
+frame.Position = UDim2.new(0.5, -110, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Active = true
+frame.Draggable = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "Сила броска (1-1000)"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 15
+title.Parent = frame
+
+local box = Instance.new("TextBox")
+box.Size = UDim2.new(0.8, 0, 0, 32)
+box.Position = UDim2.new(0.1, 0, 0, 38)
+box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+box.TextColor3 = Color3.new(1, 1, 1)
+box.PlaceholderText = "Сейчас: " .. strength
+box.Text = ""
+box.ClearTextOnFocus = false
+box.Font = Enum.Font.Gotham
+box.TextSize = 14
+box.Parent = frame
+Instance.new("UICorner", box).CornerRadius = UDim.new(0, 6)
+
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0.8, 0, 0, 30)
+btn.Position = UDim2.new(0.1, 0, 0, 80)
+btn.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+btn.Text = "OK"
+btn.TextColor3 = Color3.new(1, 1, 1)
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 14
+btn.Parent = frame
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+btn.MouseButton1Click:Connect(function()
+    local n = tonumber(box.Text)
+    if n then
+        strength = math.clamp(math.floor(n), 1, 1000)
+        box.Text = ""
+        box.PlaceholderText = "Сейчас: " .. strength
+    else
+        box.Text = ""
+        box.PlaceholderText = "Нужно число!"
+    end
+end)
+
+-- Бросок
+local function launch(part)
+    if not part or not part.Parent then return end
+    if player.Character and part:IsDescendantOf(player.Character) then return end
+
+    local dir = workspace.CurrentCamera.CFrame.LookVector
+    local vel = dir * strength
+
+    -- несколько кадров подряд, чтобы игра не перебила скорость
+    local frames = 0
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        frames += 1
+        if part and part.Parent then
+            part.AssemblyLinearVelocity = vel
+        end
+        if frames >= 6 then conn:Disconnect() end
+    end)
+end
+
+local function onGrab(grabParts)
+    local held
+    local alive = true
+
+    task.spawn(function()
+        local grabPart = grabParts:WaitForChild("GrabPart", 3)
+        local weld = grabPart and grabPart:WaitForChild("WeldConstraint", 3)
+        while alive and weld do
+            if weld.Part1 then held = weld.Part1 end
+            task.wait()
+        end
+    end)
+
+    grabParts.AncestryChanged:Connect(function(_, newParent)
+        if not newParent then
+            alive = false
+            launch(held)
+        end
+    end)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "GrabParts" then
+        onGrab(child)
+    end
+end)
+
+local existing = workspace:FindFirstChild("GrabParts")
+if existing then onGrab(existing) end
